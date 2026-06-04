@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bionic Hand Adder</title>
+    <style>
+        /* General Theme */
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            background: black;
+            color: #0ff;
+            overflow: hidden;
+        }
+        .container {
+            margin-top: 50px;
+            padding: 20px;
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            box-shadow: 0 0 20px #0ff, 0 0 40px #0ff inset;
+            display: inline-block;
+            z-index: 2;
+            position: relative;
+        }
+        h1 {
+            color: #ff0;
+            text-shadow: 0 0 10px #ff0, 0 0 20px #ff0;
+        }
+        input {
+            padding: 10px;
+            margin: 10px;
+            width: 100px;
+            background: black;
+            border: 1px solid #0ff;
+            color: #0ff;
+            font-size: 16px;
+            border-radius: 5px;
+            text-align: center;
+            box-shadow: 0 0 10px #0ff;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background: black;
+            border: 1px solid #ff00ff;
+            color: #ff00ff;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            box-shadow: 0 0 10px #ff00ff;
+            transition: all 0.3s ease;
+        }
+        button:hover {
+            background: #ff00ff;
+            color: black;
+            box-shadow: 0 0 20px #ff00ff, 0 0 40px #ff00ff;
+        }
+
+        /* Floating neon numbers background */
+        .neon-number {
+            position: absolute;
+            font-size: 30px;
+            font-weight: bold;
+            opacity: 0.3;
+            animation: floatUp 8s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes floatUp {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            20% { opacity: 0.5; }
+            100% { transform: translateY(-10vh) rotate(360deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bionic Hand Adder</h1>
+        <input type="number" id="num1" placeholder="First Number">
+        <input type="number" id="num2" placeholder="Second Number">
+        <br>
+        <button id="connectBtn">Connect to Hand</button>
+        <button id="addBtn">Add</button>
+    </div>
+
+    <script>
+        let port;
+        let writer;
+
+        // Floating neon numbers generator
+        const colors = ["#0ff", "#ff0", "#f0f", "#0f0", "#f00", "#0ff"];
+        function createNeonNumber() {
+            const num = document.createElement("div");
+            num.className = "neon-number";
+            num.textContent = Math.floor(Math.random() * 10);
+            num.style.color = colors[Math.floor(Math.random() * colors.length)];
+            num.style.left = Math.random() * 100 + "vw";
+            num.style.fontSize = (20 + Math.random() * 30) + "px";
+            num.style.animationDuration = (5 + Math.random() * 5) + "s";
+            document.body.appendChild(num);
+            setTimeout(() => num.remove(), 8000);
+        }
+        setInterval(createNeonNumber, 300);
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+                writer = port.writable.getWriter();
+                alert("Connected to Bionic Hand!");
+                await resetFingers();
+            } catch (err) {
+                alert("Error: " + err);
+            }
+        });
+
+        document.getElementById('addBtn').addEventListener('click', async () => {
+            if (!writer) {
+                alert("Please connect to the Bionic Hand first.");
+                return;
+            }
+            let a = parseInt(document.getElementById("num1").value) || 0;
+            let b = parseInt(document.getElementById("num2").value) || 0;
+            let sum = a + b;
+
+            if (sum > 10) {
+                alert("Sorry, we have only 10 fingers.");
+                await resetFingers();
+            } 
+            else if (sum <= 5) {
+                await showFingers(sum);
+            } 
+            else {
+                let firstPart = 5;
+                let secondPart = sum - 5;
+                await showFingers(firstPart);
+                await delay(1500);
+                await resetFingers();
+                await delay(1000);
+                await showFingers(secondPart);
+            }
+
+            let again = confirm(`Result = ${sum}. Do you want to add another?`);
+            if (again) {
+                await resetFingers();
+                document.getElementById("num1").value = "";
+                document.getElementById("num2").value = "";
+            } else {
+                await resetFingers();
+                window.close();
+            }
+        });
+
+        async function showFingers(num) {
+            let byteValue = numberToFingerByte(num);
+            await writer.write(new Uint8Array([byteValue]));
+        }
+
+        async function resetFingers() {
+            await writer.write(new Uint8Array([0b00000]));
+        }
+
+        function numberToFingerByte(num) {
+            let states = 0b00000;
+            if (num >= 1) states |= (1 << 1);
+            if (num >= 2) states |= (1 << 2);
+            if (num >= 3) states |= (1 << 3);
+            if (num >= 4) states |= (1 << 4);
+            if (num >= 5) states |= (1 << 0);
+            return states;
+        }
+
+        function delay(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
